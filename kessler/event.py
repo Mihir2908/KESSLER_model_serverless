@@ -499,13 +499,23 @@ class EventDataset():
             event.plot_feature(feature_name, ax=ax, *args, **kwargs)
             if 'label' in kwargs:
                 kwargs.pop('label')  # We want to label only the first Event in this EventDataset, for not cluttering the legend
-
-        if file_name is not None:
+            
+        if file_name is not None:            
+            if os.path.exists(file_name):
+                os.remove(file_name)
             print('Plotting to file: {}'.format(file_name))
             plt.savefig(file_name)
-
+            if 'fig' in locals():  # Only close if you created fig
+                plt.close(fig)
+        
         if return_ax:
             return ax
+        
+        for idx, event in enumerate(self):
+            print(f"Plotting event {idx} for feature {feature_name}")
+            event.plot_feature(feature_name, ax=ax, *args, **kwargs)
+            if 'label' in kwargs:
+                kwargs.pop('label')
 
     def plot_features(self, feature_names, figsize=None, axs=None, return_axs=False, file_name=None, sharex=True, *args, **kwargs):
         if not isinstance(feature_names, list):
@@ -568,3 +578,4 @@ class EventDataset():
             event_lengths_max = max(event_lengths)
             event_lengths_mean = sum(event_lengths)/len(event_lengths)
             return 'EventDataset(Events:{}, number of CDMs per event: {} (min), {} (max), {:.2f} (mean))'.format(len(self._events), event_lengths_min, event_lengths_max, event_lengths_mean)
+

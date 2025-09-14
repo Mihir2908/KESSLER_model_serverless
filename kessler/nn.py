@@ -150,7 +150,8 @@ class LSTMPredictor(nn.Module):
             print('Plotting to file: {}'.format(file_name))
             plt.savefig(file_name)
 
-    def learn(self, event_set, epochs=2, lr=1e-3, batch_size=8, device='cpu', valid_proportion=0.15, num_workers=4, event_samples_for_stats=250, file_name_prefix=None):
+    #def learn(self, event_set, epochs=2, lr=1e-3, batch_size=8, device='cpu', valid_proportion=0.15, num_workers=4, event_samples_for_stats=250, file_name_prefix=None):
+    def learn(self, event_set, epochs=10, lr=1e-3, batch_size=16, device='cpu', valid_proportion=0.15, num_workers=4, event_samples_for_stats=1000, file_name_prefix=None):
         if device is None:
             device = torch.device('cpu')
 
@@ -170,8 +171,18 @@ class LSTMPredictor(nn.Module):
         event_set = event_set.filter(lambda event: len(event) > 1)
 
         valid_set_size = int(len(event_set) * valid_proportion)
+        
+        #if valid_set_size == 0:
+         #   if valid_proportion == 0:
+          #      valid_set = []
+           # else:
+            #    raise RuntimeError('Validation set size is 0 for the given valid_proportion ({}) and number of events ({})'.format(valid_proportion, len(event_set)))
+        
+        #original code: start
         if valid_set_size == 0:
             raise RuntimeError('Validation set size is 0 for the given valid_proportion ({}) and number of events ({})'.format(valid_proportion, len(event_set)))
+        #original code: end
+        
         train_set_size = len(event_set) - valid_set_size
         train_set = DatasetEventDataset(event_set[:train_set_size], self._features, self._features_stats)
         valid_set = DatasetEventDataset(event_set[train_set_size:], self._features, self._features_stats)
@@ -183,6 +194,11 @@ class LSTMPredictor(nn.Module):
             total_iters = 0
         else:
             total_iters = self._hist_train_loss_iters[-1]
+        
+        print("Train set size:", len(train_set))
+        print("Valid set size:", len(valid_set))
+        print("Valid loader batches:", len(valid_loader))
+        
         for epoch in range(epochs):
             with torch.no_grad():
                 for _, (events, event_lengths) in enumerate(valid_loader):
@@ -212,6 +228,7 @@ class LSTMPredictor(nn.Module):
                 loss.backward()
                 optimizer.step()
 
+                #torch.tensor.detach()
                 train_loss = float(loss)
                 self._hist_train_loss_iters.append(total_iters)
                 self._hist_train_loss.append(train_loss)

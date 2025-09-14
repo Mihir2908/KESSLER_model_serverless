@@ -359,7 +359,6 @@ def from_rtn_to_cartesian(state_rtn, rtn_to_cartesian_rotation_matrix):
 
 
 def from_TEME_to_ITRF(state, time):
-    import skyfield.sgp4lib
     """
     This function transforms the state from TEME reference frame, to ITRF reference frame, at a given time.
     TEME (True Equator, Mean Equinox reference frame)--> Earth-Centered Inertial Reference Frame
@@ -377,6 +376,11 @@ def from_TEME_to_ITRF(state, time):
         This method relies on a 3rd party library for the conversion (Skyfield:
         https://github.com/skyfielders/python-skyfield).
     """
+    try:
+        import skyfield.sgp4lib
+    except ImportError as e:
+        raise ImportError("skyfield.sgp4lib is required for from_TEME_to_ITRF. Please install the 'skyfield' package.") from e
+    
     r, v = state[0], state[1]
     # time must be in J2000
     # velocity in the converter is in m/days, so we multiply by 86400 before conversion and divide later
@@ -1436,6 +1440,28 @@ progress_bar_num_iters = None
 progress_bar_len_str_num_iters = None
 progress_bar_time_start = None
 progress_bar_prev_duration = None
+
+def days_hours_mins_secs_str(seconds):
+    """
+    Converts a number of seconds to a string in the format 'Xd Xh Xm Xs'.
+    Args:
+        seconds (float): Number of seconds.
+    Returns:
+        str: Formatted string.
+    """
+    seconds = int(seconds)
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0 or days > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0 or hours > 0 or days > 0:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return ' '.join(parts)
 
 
 def progress_bar_init(message, num_iters, iter_name='Items'):

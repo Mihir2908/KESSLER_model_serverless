@@ -14,6 +14,7 @@ import dsgp4
 
 import kessler.model
 from kessler import GNSS, Radar
+import kessler.plot
 
 class UtilTestCase(unittest.TestCase):
     def test_make_chaser_make_target(self):
@@ -24,11 +25,26 @@ class UtilTestCase(unittest.TestCase):
         c_tle_list=['0 HARBINGER',
                '1 44229U 19026E   22068.90017356  .00004812  00000-0  20383-3 0  9992',
                '2 44229  40.0180 261.5261 0008532 356.1827   3.8908 15.23652474158314']
+        tle_target_dist = []
+        tle_chaser_dist = []
+        model_tle_target = []
+        model_tle_chaser = []
+
+        N_samples = 1000
         t_tle = dsgp4.tle.TLE(t_tle_list)
         c_tle = dsgp4.tle.TLE(c_tle_list)
         model = kessler.model.Conjunction(t_observing_instruments=[GNSS()], c_observing_instruments=[Radar()], t_tle=t_tle, c_tle=c_tle)
-        model_tle_target = model.make_target()
-        model_tle_chaser = model.make_chaser()
+        for i in range(N_samples):
+            model_tle_target = model.make_target()
+            model_tle_chaser = model.make_chaser()
+            tle_target_dist.append(model_tle_target)
+            tle_chaser_dist.append(model_tle_chaser)
+       
+       # Plot target TLEs
+        kessler.plot.plot_tles(tle_target_dist, file_name ='Chaser_TLEs_Population_Distribution_Plot.pdf')
+
+       # Plot chaser TLEs
+        kessler.plot.plot_tles(tle_chaser_dist, file_name='Chaser_TLEs_Population_Distribution_Plot.pdf')
 
         model_tle_target.update({"mean_anomaly": float(t_tle.mean_anomaly)})
         model_tle_chaser.update({"mean_anomaly": float(c_tle.mean_anomaly)})
@@ -37,3 +53,10 @@ class UtilTestCase(unittest.TestCase):
         self.assertEqual(model_tle_target.line2, t_tle_list[2])
         self.assertEqual(model_tle_chaser.line1, c_tle_list[1])
         self.assertEqual(model_tle_chaser.line2, c_tle_list[2])
+       
+if __name__ == "__main__":
+    unittest.main()
+
+# For a population sample of TLEs
+tles = dsgp4.tle.load('tests/tles_sample_population.txt')
+kessler.plot.plot_tles(tles, file_name='TLEs_Population_Distribution_Plot.pdf')

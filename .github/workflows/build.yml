@@ -37,11 +37,11 @@ jobs:
       run: |
         coverage run -m pytest
         coverage xml
-    - name: Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        verbose: true
+#    - name: Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        token: ${{ secrets.CODECOV_TOKEN }}
+#        verbose: true
     - name: Upload to github pages 🚀
       if: ${{ github.event_name == 'push' }}
       uses: JamesIves/github-pages-deploy-action@v4

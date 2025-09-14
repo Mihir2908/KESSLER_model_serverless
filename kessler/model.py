@@ -745,11 +745,18 @@ class Conjunction:
         """
         found = False
         iteration = 0
+        #while not found and iteration < max_iters:
         while not found:
             iteration += 1
             traced_model = pyro.poutine.trace(self.forward).get_trace()
             if traced_model.nodes['conj']['value']:
                 found = True
+                print(f"Conjunction found after {iteration} iterations.")
+        
+        if not found:
+            #print(f"No conjunction found after {max_iters} iterations.")
+            return None, iteration
+        
         print(f"After {iteration} iterations, generated event with {len(traced_model.nodes['cdms']['infer']['cdms'])} CDMs")
         return traced_model, iteration
     
