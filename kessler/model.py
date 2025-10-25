@@ -184,7 +184,7 @@ class Conjunction:
                  max_duration_days=7.0,
                  time_resolution=6e5,
                  time_upsample_factor=100,
-                 miss_dist_threshold=5e3,
+                 miss_dist_threshold=5e10,
                  prior_dict=None,
                  t_prob_new_obs=0.96,
                  c_prob_new_obs=0.4,
@@ -348,6 +348,9 @@ class Conjunction:
                 cdm = ConjunctionDataMessage()
                 cdm.set_object(0, 'OBJECT_DESIGNATOR', 'KESSLER_SOFTWARE_'+str(uuid.uuid1()))
                 cdm.set_object(1, 'OBJECT_DESIGNATOR', 'KESSLER_SOFTWARE_'+str(uuid.uuid1()))
+                # After setting catalog names for both objects
+                event_id = f"{t_tle.satellite_catalog_number}_{c_tle.satellite_catalog_number}"
+                cdm.set_header('EVENT_ID', event_id)
 
                 cdm.set_header('ORIGINATOR', 'KESSLER_SOFTWARE')
 
@@ -393,7 +396,7 @@ class Conjunction:
 
             tca_jd = util.from_mjd_to_jd(time_conj_mjd)
             obs_jd = util.from_mjd_to_jd(time_obs_mjd)
-            cdm.set_relative_metadata('TCA', util.from_jd_to_cdm_datetime_str(tca_jd))
+            cdm.set_header('TCA', util.from_jd_to_cdm_datetime_str(tca_jd))
             cdm.set_header('CREATION_DATE', util.from_jd_to_cdm_datetime_str(obs_jd))
             if t_state_new_obs is not None:
                 obs_tle_t,_=dsgp4.newton_method(t_tle,time_obs_mjd,verbose=False)
@@ -731,7 +734,7 @@ class Conjunction:
             pyro.sample('obs_cdm0_c_inc', dist.Normal(cdm0_c_inc, self._likelihood_c_stddev[2]), obs=cdm0_c_inc)
             pyro.sample('obs_cdm0_time_to_tca', dist.Normal(cdm0_time_to_tca, self._likelihood_time_to_tca_stddev), obs=cdm0_time_to_tca)
 
-    def get_conjunction(self):
+    def get_conjunction(self, max_iters=None):
         """
         This function generates a conjunction data message (``kessler.cdm.ConjunctionDataMessage``) from the current state of the chaser and target.
         It uses the ``self.forward()`` method to generate the conjunction and returns it.
@@ -743,23 +746,70 @@ class Conjunction:
             >>> for cdm in cdms:
                     print(cdm)
         """
-        found = False
+        #found = False
         iteration = 0
+        traced_model = None
         #while not found and iteration < max_iters:
-        while not found:
+        #while not found:
+        while True:
+            if max_iters is not None and iteration >= max_iters:
+                return None, iteration
             iteration += 1
             traced_model = pyro.poutine.trace(self.forward).get_trace()
             if traced_model.nodes['conj']['value']:
-                found = True
-                print(f"Conjunction found after {iteration} iterations.")
-        
-        if not found:
+                cdms = traced_model.nodes['cdms']['infer']['cdms']
+                #found = True
+                print(f"Conjunction found after {iteration} iterations. CDMs generated: {len(cdms)}")
+                break
+        #if not found:
             #print(f"No conjunction found after {max_iters} iterations.")
-            return None, iteration
+         #   return None, iteration
         
         print(f"After {iteration} iterations, generated event with {len(traced_model.nodes['cdms']['infer']['cdms'])} CDMs")
         return traced_model, iteration
-    
+
+def generate_conjunctions_over_pairs(
+    tles,
+    max_pairs=None,
+    max_iters_per_pair=20,
+    return_traces=False,
+    **kwargs):
+        """
+        Iterate over unordered TLE pairs (i<j), fix the pair in ConjunctionSimplified, and
+        attempt to find a conjunction per pair (bounded by max_iters_per_pair).
+        kwargs are forwarded to ConjunctionSimplified (time0, thresholds, instruments, etc.).
+
+        - return_traces=False: returns list[list[CDM]]
+        - return_traces=True: returns list[dict(trace, iterations, t_tle, c_tle)]
+        """
+        events = []
+        traces = []
+        n = len(tles)
+        produced = 0
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                if max_pairs is not None and produced >= max_pairs:
+                    return traces if return_traces else events
+
+                t_tle, c_tle = tles[i], tles[j]
+                model = ConjunctionSimplified(tles=tles, t_tle=t_tle, c_tle=c_tle, **kwargs)
+                trace, iters = model.get_conjunction(max_iters=max_iters_per_pair)
+                if trace is None:
+                    continue
+
+                cdms = trace.nodes['cdms']['infer']['cdms']
+                if not cdms:
+                    continue
+
+                produced += 1
+                if return_traces:
+                    traces.append({"trace": trace, "iterations": iters, "t_tle": t_tle, "c_tle": c_tle})
+                else:
+                    events.append(cdms)
+
+        return traces if return_traces else events
+
 
 class ConjunctionSimplified(Conjunction):
     """

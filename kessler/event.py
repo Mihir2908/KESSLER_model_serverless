@@ -387,7 +387,17 @@ class EventDataset():
         'c_cthr_ndot':'OBJECT2_CTHR_NDOT',
         'c_cthr_drg':'OBJECT2_CTHR_DRG',
         'c_cthr_srp':'OBJECT2_CTHR_SRP',
-        'c_cthr_thr':'OBJECT2_CTHR_THR'}, group_events_by='event_id', date_format='%Y-%m-%d %H:%M:%S.%f'):
+        'c_cthr_thr':'OBJECT2_CTHR_THR'}, group_events_by='EVENT_ID', date_format='%Y-%m-%d %H:%M:%S.%f'):
+
+        # Correction: Normalize column names to lowercase to match cdm_compatible_fields keys
+        df = df.copy()
+        df.columns = [str(c).lower() for c in df.columns]
+        group_col = str(group_events_by).lower()
+
+        if group_col not in df.columns:
+            raise KeyError(f"group_events_by column '{group_events_by}' not found in DataFrame columns {list(df.columns)}")
+        
+        # End of correction
 
         print('Dataframe with {} rows and {} columns'.format(len(df), len(df.columns)))
         print('Dropping columns with NaNs')
@@ -413,6 +423,26 @@ class EventDataset():
                         if util.is_date(value, date_format):
                             value = util.transform_date_str(value, date_format, '%Y-%m-%dT%H:%M:%S.%f')
                         cdm[cdm_name] = value
+
+                        # DEBUG: Check what was actually set
+                        #if cdm_name == 'TCA':
+                            #print(f"Retrieved after setting: '{cdm['TCA']}'")
+
+                        #correction starts here
+                        #if cdm_name in cdm._keys_header:
+                            #cdm.set_header(cdm_name, value)
+                        #elif cdm_name in cdm._keys_relative_metadata:
+                            #cdm.set_relative_metadata(cdm_name, value)
+                        #elif cdm_name.startswith('OBJECT1_'):
+                            #object_field = cdm_name.replace('OBJECT1_', '')
+                            #cdm.set_object(0, object_field, value)
+                        #elif cdm_name.startswith('OBJECT2_'):
+                            #object_field = cdm_name.replace('OBJECT2_', '')
+                            #cdm.set_object(1, object_field, value)
+                        #else:
+                            #print(f"Warning: Unknown CDM field {cdm_name}")
+                      #correction ends here
+
                 cdms.append(cdm)
             events.append(Event(cdms))
         event_dataset = EventDataset(events=events)

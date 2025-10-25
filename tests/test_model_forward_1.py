@@ -9,6 +9,7 @@ import os
 
 import kessler.model
 from kessler import GNSS, Radar
+from kessler.model import generate_conjunctions_over_pairs
 
 class UtilTestCase(unittest.TestCase):
     def test_forward_and_plot_cdms(self):
@@ -33,56 +34,86 @@ class UtilTestCase(unittest.TestCase):
         tles=dsgp4.tle.load(tles_path)
 
         # Create the Conjunction model
-        conjunction_model = kessler.model.ConjunctionSimplified(time0=60727.13899462018,
-                                                        # max_duration_days=7.0,
-                                                        # time_resolution=600000.0,
-                                                        # time_upsample_factor=100,
-                                                        miss_dist_threshold=5000.0,
-                                                        prior_dict=None,
-                                                        t_prob_new_obs=0.96,
-                                                        c_prob_new_obs=0.4,
-                                                        cdm_update_every_hours=8.0,
-                                                        mc_samples=100,
-                                                        mc_upsample_factor=100,
-                                                        pc_method='MC',
-                                                        collision_threshold=70,
-                                                        # likelihood_t_stddev=[371.068006, 0.0999999999, 0.172560879],
-                                                        # likelihood_c_stddev=[371.068006, 0.0999999999, 0.172560879],
-                                                        likelihood_time_to_tca_stddev=0.7,
-                                                        t_observing_instruments=[gnss],
-                                                        c_observing_instruments=[radar],
-                                                        tles=tles,)
+        #conjunction_model = kessler.model.ConjunctionSimplified(time0=60727.13899462018,
+                #not included in correction             # max_duration_days=7.0,
+                #not included in correction             # time_resolution=600000.0,
+                #not included in correction             # time_upsample_factor=100,
+                                                        #miss_dist_threshold=5000.0,
+                                                        #prior_dict=None,
+                                                        #t_prob_new_obs=0.96,
+                                                        #c_prob_new_obs=0.4,
+                                                        #cdm_update_every_hours=8.0,
+                                                        #mc_samples=100,
+                                                        #mc_upsample_factor=100,
+                                                        #pc_method='MC',
+                                                        #collision_threshold=70,
+                #not included in correction             # likelihood_t_stddev=[371.068006, 0.0999999999, 0.172560879],
+                #not included in correction             # likelihood_c_stddev=[371.068006, 0.0999999999, 0.172560879],
+                                                        #likelihood_time_to_tca_stddev=0.7,
+                                                        #t_observing_instruments=[gnss],
+                                                        #c_observing_instruments=[radar],
+                                                        #tles=tles,)
 
         # Run the forward model and get the Pyro trace with CDMs
+        
+        #Creating a Conjunction Model for Multiple Conjunction Events
+
+        events_cdms = generate_conjunctions_over_pairs(
+            tles,
+            max_pairs=10,
+            max_iters_per_pair=20,
+            time0=60727.13899462018,
+            miss_dist_threshold=5000.0,
+            t_prob_new_obs=0.96,
+            c_prob_new_obs=0.4,
+            cdm_update_every_hours=8.0,
+            mc_samples=100,
+            mc_upsample_factor=100,
+            pc_method='MC',
+            collision_threshold=70,
+            likelihood_time_to_tca_stddev=0.7,
+            t_observing_instruments=[gnss],
+            c_observing_instruments=[radar],
+        )
+
+        if not events_cdms:
+            self.skipTest("No conjunction events found across TLE pairs.")
+
+
         print("About to call get_conjunction()")
-        trace, iters = conjunction_model.get_conjunction()
-        if trace is None:
-            print(f"No conjunction found after {iters} iterations. Exiting test.")
-            return  # or raise an exception, or skip the rest of the test
-        cdms_1 = trace.nodes['cdms']['infer']['cdms']
-        print("About to call get_conjunction()")
+        
+        # correction starts here -----
+        #trace, iters = conjunction_model.get_conjunction()
+        #if trace is None:
+        #    print(f"No conjunction found after {iters} iterations. Exiting test.")
+        #    return  # or raise an exception, or skip the rest of the test
+        #cdms_1 = trace.nodes['cdms']['infer']['cdms']
+        #print("About to call get_conjunction()")
 
         # Convert CDMs to DataFrame for plotting
-        cdm_dicts = [cdm.to_dict() for cdm in cdms_1]
-        df = pd.DataFrame(cdm_dicts)
+        #cdm_dicts = [cdm.to_dict() for cdm in cdms_1]
+        cdm_many = [cdm.to_dict() for ev in events_cdms for cdm in ev]
+        df_many = pd.DataFrame(cdm_many)
+
+        # correction ends here -----
 
         # Save the DataFrame to a CSV file
-        df.to_csv("synthetic_cdms_1.csv", index=False)
-        print("Synthetic CDMs saved to synthetic_cdms_1.csv")
+        df_many.to_csv("synthetic_cdms_many.csv", index=False)
+        print("Synthetic CDMs saved to synthetic_cdms_many.csv")
 
         # Example: Get summary statistics
-        summary = df.describe()
+        summary = df_many.describe()
         print(summary)
 
         # Generalized: Plot all numeric columns (except TCA) vs TCA
-        if 'TCA' in df.columns:
-            df['TCA'] = pd.to_datetime(df['TCA'], errors='coerce')
-            df = df.sort_values('TCA')
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if 'TCA' in df_many.columns:
+            df_many['TCA'] = pd.to_datetime(df_many['TCA'], errors='coerce')
+            df_many = df_many.sort_values('TCA')
+            numeric_cols = df_many.select_dtypes(include=[np.number]).columns.tolist()
             for col in numeric_cols:
                 if col.upper() != 'TCA':
                     plt.figure(figsize=(8, 5))
-                    plt.plot(df['TCA'], df[col], marker='o')
+                    plt.plot(df_many['TCA'], df_many[col], marker='o')
                     plt.xlabel('TCA')
                     plt.ylabel(col)
                     plt.title(f'Synthetic CDMs: {col} vs TCA')
@@ -96,7 +127,7 @@ class UtilTestCase(unittest.TestCase):
             print("TCA not found in CDM DataFrame columns.")
 
         # Return cdms for programmatic use
-        return cdms_1
+        return cdm_many
 
 if __name__ == "__main__":
     unittest.main()
